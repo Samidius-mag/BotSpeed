@@ -6,6 +6,7 @@ import { readJSONFile } from './fileUtils.js';
 import { checkSpeedLimit } from './speedLimit.js';
 import { processTimeData } from './timeProcessor.js';
 
+
 const url = 'https://atp.ttwcome.ru/atp/api/v2';
 const params = {
     token: '0E9DC7EE2995',
@@ -58,6 +59,11 @@ export const updateData = async () => {
             time: time // Добавляем время в объект
         };
 
+        // Обрабатываем временные данные
+        //processTimeData(outputData); 
+
+
+
         // Сохранение данных в файл currentLoc.json
         fs.writeFileSync(path.join(__dirname, 'currentLoc.json'), JSON.stringify(outputData, null, 2));
         console.log('Данные успешно обновлены и сохранены в файл currentLoc.json');
@@ -68,9 +74,13 @@ export const updateData = async () => {
 
         const geoData = readJSONFile(geoFilePath);
         const passportsData = readJSONFile(passportFilePath);
-        
+
         await checkSpeedLimit(geoData, outputData, passportsData);
+        
         processTimeData(outputData); // Вызываем функцию для обработки временных данных
+
+        // Вызываем функцию для обработки зон парковки
+        
 
     } catch (error) {
         console.error('Произошла ошибка:', error);

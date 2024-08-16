@@ -1,10 +1,15 @@
 import fs from 'fs';
 import path from 'path';
-import { sendTelegramMessage } from './telegram.js';
 import { fileURLToPath } from 'url';
 import { dirname } from 'path';
+import { sendTelegramMessage } from './telegram.js';
+
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
+
+// Объект для хранения количеств нарушений по автомобилям и зонам
+let violationCounts = {};
+
 // Функция для проверки превышения скорости и сохранения результатов
 export const checkSpeedLimit = async (geoData, currentData, passportsData) => {
     let violations = [];
@@ -13,10 +18,12 @@ export const checkSpeedLimit = async (geoData, currentData, passportsData) => {
         const lat = currentData.lat[index];
         const lon = currentData.lon[index];
         const vehicleId = currentData.idMo[index];
+        const time = currentData.time[index];
 
         // Находим номер регистрации автомобиля по его id
         const vehiclePassport = passportsData.passports.find(passport => passport.idMO === vehicleId);
         const regNumber = vehiclePassport ? vehiclePassport.regNumber : 'Неизвестный номер';
+        const model = vehiclePassport.modelOrMarkOrModif;
 
         geoData.features.forEach((feature) => {
             const zoneName = feature.properties.zoneName;
@@ -31,15 +38,37 @@ export const checkSpeedLimit = async (geoData, currentData, passportsData) => {
                     violations.push({
                         regNumber: regNumber,
                         speed: speed,
+                        model: model,
+                        time: time,
                         maxSpeed: maxSpeed,
                         zone: zoneName,
                         coordinates: { lat: lat, lon: lon }
                     });
 
-                    const violationMessage = `Нарушение! Автомобиль с номером: ${regNumber}, скорость: ${speed} км/ч, зона: ${zoneName}, превышение на: ${speedLimitViolation} км/ч`;
+                    const violationMessage = `
+Дата/время нарушения ${time}. 
+Автомобиль ${model} номер: ${regNumber},
+развил скорость: ${speed} км/ч. 
+В зоне: ${zoneName} 
+и тем самым превысил ограничение скорости на: ${speedLimitViolation} км/ч.
+Координаты нарушителя: 
+https://www.google.com/maps/search/${lon}E,${lat}N?sa=X&ved=1t:242&ictx=111`;
+
                     console.log(violationMessage);
-                    // Отправляем сообщение в Telegram
-                    sendTelegramMessage(violationMessage); // Добавил await, чтобы дождаться выполнения
+
+                    // Формируем уникальный ключ для идентификации нарушений по автомобилям и зонам
+                    const violationKey = `${regNumber}-${zoneName}`;
+
+                    // Проверка и обновление количества нарушений
+                    if (violationCounts[violationKey]) {
+                        violationCounts[violationKey]++;
+                        // Отправляем сообщение в Telegram только при повторных нарушениях
+                        if (violationCounts[violationKey] > 1) {
+                             sendTelegramMessage(violationMessage);
+                        }
+                    } else {
+                        violationCounts[violationKey] = 1;
+                    }
                 }
             }
         });
